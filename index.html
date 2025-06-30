@@ -10,6 +10,7 @@
   <button onclick="sendData()" style="padding: 15px; font-size: 20px;">📤 Отправить данные</button>
 
   <script>
+    Telegram.WebApp.ready();
     function sendData() {
       Telegram.WebApp.sendData("Привет из Mini App!");
     }
