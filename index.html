@@ -1,38 +1,17 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
   <meta charset="UTF-8">
-  <title>Mini App Тест</title>
+  <title>Mini App Test</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <style>
-    body { font-family: sans-serif; text-align: center; padding-top: 100px; background: #f5f5f5;}
-    button { font-size: 24px; padding: 20px 50px; background: #0088cc; color: #fff; border:none; border-radius:10px; cursor:pointer;}
-  </style>
 </head>
 <body>
-  <h2>Mini App работает</h2>
-  <button onclick="send()">🚀 Отправить данные</button>
+  <h1>Mini App</h1>
+  <button onclick="sendData()" style="padding: 15px; font-size: 20px;">📤 Отправить данные</button>
 
   <script>
-    const tg = window.Telegram.WebApp;
-
-    window.addEventListener("DOMContentLoaded", () => {
-      tg.ready();
-      tg.expand();
-      console.log("🧩 Mini App готов — версия:", tg.version);
-    });
-
-    function send() {
-      const payload = { test: true, time: new Date().toISOString() };
-      console.log("📤 Пытаемся отправить:", payload);
-      if (tg && typeof tg.sendData === "function") {
-        tg.sendData(JSON.stringify(payload));
-        console.log("✅ sendData вызван");
-        tg.close();
-      } else {
-        console.error("❌ sendData не доступен");
-        alert("Мини-приложение не запущено из Telegram");
-      }
+    function sendData() {
+      Telegram.WebApp.sendData("Привет из Mini App!");
     }
   </script>
 </body>
