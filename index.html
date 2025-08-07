@@ -74,7 +74,7 @@
 import React from 'https://esm.sh/react@18.2.0';
 import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
 
-// --- Start of lib/utils.js (converted from lib/utils.ts) ---
+// --- Start of lib/utils.js ---
 const formatDescription = (text) => {
     if (!text) return "";
     const urlRegex = /(https?:\/\/[^\s"'<>[\]]+)/g;
@@ -131,7 +131,7 @@ const triggerHapticFeedback = (style) => {
 };
 // --- End of lib/utils.js ---
 
-// --- Start of types.js (converted from types.ts) ---
+// --- Start of types.js ---
 const CategoryKey = {
     KAZAN: 'казан',
     MANGAL: 'граммы',
@@ -149,7 +149,7 @@ const CategoryKey = {
 };
 // --- End of types.js ---
 
-// --- Start of App.js (converted from App.tsx) ---
+// --- Start of App.js ---
 const { useState, useEffect, useCallback, useRef, forwardRef } = React;
 const e = React.createElement;
 
@@ -171,7 +171,7 @@ const CATEGORIES = {
 };
 
 const FALLBACK_SHEET_ID = '1dbwpkM0DDszZfppbJbOkYrnXZyquPJi5Ynbq4a5fP04';
-const DEFAULT_SHEET_NAME = 'menu';
+const DEFAULT_SHEET_NAME = 'Меню';
 
 // --- ICONS ---
 const SunIcon = ({ className }) => e('svg', { className, xmlns: 'http://www.w3.org/2000/svg', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: '2' }, e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z' }));
@@ -179,8 +179,8 @@ const MoonIcon = ({ className }) => e('svg', { className, xmlns: 'http://www.w3.
 const CalendarIcon = ({ className }) => e('svg', { xmlns: 'http://www.w3.org/2000/svg', viewBox: '0 0 24 24', className, fill: 'currentColor' }, e('path', { d: 'M19 3h-1V2h-2v1H8V2H6v1H5c-1.1 0-2 .9-2 2v15c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 17H5V8h14v12z' }));
 const CartIcon = ({ className }) => e('svg', { xmlns: 'http://www.w3.org/2000/svg', className, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: '2' }, e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z' }));
 const XIcon = ({ className }) => e('svg', { xmlns: 'http://www.w3.org/2000/svg', className, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: '2.5' }, e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M6 18L18 6M6 6l12 12' }));
-const PlusIcon = ({ className }) => e('svg', { xmlns: 'http://www.w3.org/2000/svg', className, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: '2.5' }, e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M12 4.5v15m7.5-7.5h-15' }));
-const MinusIcon = ({ className }) => e('svg', { xmlns: 'http://www.w3.org/2000/svg', className, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: '2.5' }, e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M19.5 12h-15' }));
+const PlusIcon = ({ className }) => e('svg', { xmlns: 'http://www.w3.org/2000/svg', className, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: '2' }, e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M12 4.5v15m7.5-7.5h-15' }));
+const MinusIcon = ({ className }) => e('svg', { xmlns: 'http://www.w3.org/2000/svg', className, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: '2' }, e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M19.5 12h-15' }));
 
 const THEME_ICONS = {
     light: e(SunIcon, { className: 'w-6 h-6' }),
@@ -247,24 +247,36 @@ const ItemCard = ({ item, index, onAddToCart, onViewDetails, onViewBanquetMenu }
     );
 };
 
-const Cart = forwardRef(({ cart, onIncrement, onDecrement, onRemove, isVisible }, ref) => {
+const Cart = forwardRef(({ cart, onIncrement, onDecrement, onRemove, onConfirm, isVisible }, ref) => {
+    const total = cart.reduce((sum, item) => sum + calculateTotal(item.qty, item.price, item.unit, item.customPriceJson), 0);
     return e('div', { ref, className: `fixed bottom-0 left-0 right-0 z-40 transition-transform duration-500 ease-in-out ${isVisible ? 'translate-y-0' : 'translate-y-full'}` },
         e('div', { className: 'bg-white/80 dark:bg-gray-800/80 rounded-t-2xl shadow-[0_-8px_30px_rgba(0,0,0,0.15)] dark:shadow-[0_-8px_30px_rgba(0,0,0,0.3)] p-4 backdrop-blur-md' },
             e('div', { className: 'max-w-4xl mx-auto' },
                 e('h2', { className: 'font-bold text-lg sm:text-xl mb-3 px-2 text-gray-900 dark:text-white' }, 'Корзина'),
                 e('div', { className: 'text-sm text-gray-800 dark:text-gray-200 space-y-3 px-2 max-h-[150px] overflow-y-auto no-scrollbar' },
-                    cart.map((item) => e('div', { key: item.id, className: 'flex justify-between items-center gap-2' },
-                        e('div', { className: 'flex-1 min-w-0' }, e('span', { className: 'font-semibold block truncate' }, item.name)),
-                        e('div', { className: 'flex items-center gap-2 sm:gap-3' },
-                            e('div', { className: 'flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-full' },
-                                e('button', { onClick: () => onDecrement(item.id), className: 'p-1.5 text-gray-700 dark:text-gray-300 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors' }, e(MinusIcon, { className: 'w-4 h-4' })),
-                                e('span', { className: 'font-medium text-sm w-8 text-center tabular-nums' }, item.qty, ' ', e('span', { className: 'text-xs' }, item.unit)),
-                                e('button', { onClick: () => onIncrement(item.id), className: 'p-1.5 text-gray-700 dark:text-gray-300 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors' }, e(PlusIcon, { className: 'w-4 h-4' }))
+                    cart.map((item) => e('div', { key: item.id, className: 'flex justify-between items-center gap-4' },
+                        e('div', { className: 'flex-1 min-w-0' },
+                            e('span', { className: 'font-semibold block truncate' }, item.name)
+                        ),
+                        e('div', { className: 'flex items-center gap-3 sm:gap-4' },
+                            e('div', { className: 'flex items-center gap-2 bg-gray-100 dark:bg-gray-700 rounded-full p-1' },
+                                e('button', { onClick: () => onDecrement(item.id), className: 'p-1 text-gray-700 dark:text-gray-300' }, e(MinusIcon, { className: 'w-4 h-4' })),
+                                e('div', { className: 'flex flex-col items-center justify-center w-12' },
+                                    e('span', { className: 'font-medium text-sm tabular-nums leading-none' }, item.qty),
+                                    item.unit && e('span', { className: 'text-[10px] text-gray-500 dark:text-gray-400 leading-none uppercase' }, item.unit)
+                                ),
+                                e('button', { onClick: () => onIncrement(item.id), className: 'p-1 text-gray-700 dark:text-gray-300' }, e(PlusIcon, { className: 'w-4 h-4' }))
                             ),
                             e('div', { className: 'w-20 text-right font-semibold' }, `${calculateTotal(item.qty, item.price, item.unit, item.customPriceJson).toFixed(0)} ₽`),
-                            e('button', { onClick: () => onRemove(item.id), className: 'text-red-500 hover:text-red-700 dark:hover:text-red-400 rounded-full hover:bg-red-100 dark:hover:bg-gray-700 p-1.5 transition-colors', 'aria-label': 'Удалить товар' }, e(XIcon, { className: 'h-5 w-5' }))
+                            e('button', { onClick: () => onRemove(item.id), className: 'text-red-500 hover:text-red-700 dark:hover:text-red-400 p-1.5' }, e(XIcon, { className: 'h-5 w-5' }))
                         )
                     ))
+                ),
+                 e('div', { className: 'pt-4 mt-2 border-t border-gray-200 dark:border-gray-700' },
+                    e('button', { 
+                        onClick: onConfirm, 
+                        className: 'bg-blue-500 hover:bg-blue-600 text-white text-base sm:text-lg w-full py-3 sm:py-3.5 rounded-xl shadow-lg transition-transform transform hover:scale-[1.02]' 
+                    }, `Подтвердить заказ: ${total.toFixed(0)} ₽`)
                 )
             )
         )
@@ -285,13 +297,13 @@ const Modal = ({ item, isVisible, onClose, style }) => {
     const imagesHtml = item.photos.map((url, index) => e('img', { key: index, src: url, className: 'w-full h-auto rounded-xl object-cover mt-4', alt: 'Фото', loading: 'lazy' }));
 
     return e('div', { className: `fixed inset-0 bg-black/60 dark:bg-black/75 flex items-center justify-center z-50 p-4 transition-opacity duration-500 ease-in-out ${isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`, onClick: onClose },
-        e('div', { style, className: `relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full m-4 flex flex-col max-h-[90vh] transition-all duration-500 ease-in-out ${isVisible ? 'scale-100 opacity-100' : 'scale-0 opacity-0'}`, onClick: (ev) => ev.stopPropagation() },
+        e('div', { style, className: `relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-xl w-full m-4 flex flex-col max-h-[90vh] transition-all duration-500 ease-in-out ${isVisible ? 'scale-100 opacity-100' : 'scale-0 opacity-0'}`, onClick: (ev) => ev.stopPropagation() },
             e('header', { className: 'sticky top-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 z-10 rounded-t-2xl' },
-                e('h3', { className: 'font-bold text-lg text-gray-900 dark:text-white pr-4' }, item.name),
+                e('h3', { className: 'font-bold text-2xl text-gray-900 dark:text-white pr-4' }, item.name),
                 e('button', { onClick: onClose, className: 'p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors flex-shrink-0', 'aria-label': 'Закрыть' }, e(XIcon, { className: 'h-6 w-6' }))
             ),
             e('div', { ref: contentRef, className: 'overflow-y-auto px-6 py-4' },
-                e('div', { className: 'whitespace-pre-wrap text-base text-gray-700 dark:text-gray-300 leading-relaxed', dangerouslySetInnerHTML: { __html: formattedHtml } }),
+                e('div', { className: 'whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300 leading-relaxed', dangerouslySetInnerHTML: { __html: formattedHtml } }),
                 e('div', { className: 'mt-4 space-y-4' }, imagesHtml)
             )
         )
@@ -339,45 +351,6 @@ const App = () => {
 
     const toggleTheme = () => { isAutoMode.current = false; triggerHapticFeedback('light'); applyTheme(currentTheme === 'light' ? 'dark' : 'light'); };
 
-    useEffect(() => {
-        const bgContainer = document.getElementById('background-container');
-        if (bgContainer) {
-            const backgroundUrl = `${window.location.origin}/files/bakground.png`;
-            bgContainer.style.backgroundImage = `url('${backgroundUrl}')`;
-        }
-    }, []);
-
-    useEffect(() => {
-        try {
-            const tg = window.Telegram?.WebApp;
-            if (tg) {
-                tg.ready();
-                tg.expand();
-                tg.enableClosingConfirmation();
-            }
-            let id = null;
-            let name = null;
-            const startParam = tg?.initDataUnsafe?.start_param || null;
-            if (startParam) {
-                const parts = startParam.split('/');
-                id = parts[0] || null;
-                name = parts.length > 1 ? parts[1] : null;
-            } else {
-                const params = new URLSearchParams(window.location.search);
-                id = params.get('sheetId');
-                name = params.get('sheetName');
-            }
-            setSheetId(id || FALLBACK_SHEET_ID);
-            setSheetName(name || DEFAULT_SHEET_NAME);
-            if (!id) console.warn(`Sheet ID not provided. Using fallback: ${FALLBACK_SHEET_ID}`);
-            if (!name) console.warn(`Sheet name not provided. Using default: '${DEFAULT_SHEET_NAME}'`);
-        } catch (err) {
-            console.error("Initialization error:", err);
-            setError("Ошибка инициализации приложения.");
-            setIsLoading(false);
-        }
-    }, []);
-
     const loadData = useCallback(async () => {
         if (!sheetId || !sheetName) return;
         setIsLoading(true);
@@ -416,10 +389,51 @@ const App = () => {
             setIsLoading(false);
         }
     }, [sheetId, sheetName]);
+
+    useEffect(() => {
+        const bgContainer = document.getElementById('background-container');
+        if (bgContainer) {
+            const backgroundUrl = `${window.location.origin}/files/bakground.png`;
+            bgContainer.style.backgroundImage = `url('${backgroundUrl}')`;
+        }
+    }, []);
+
+    useEffect(() => {
+        try {
+            const tg = window.Telegram?.WebApp;
+            if (tg) {
+                tg.ready();
+                tg.expand();
+                tg.enableClosingConfirmation();
+            }
+            let id = null;
+            let name = null;
+            const startParam = tg?.initDataUnsafe?.start_param || null;
+            if (startParam) {
+                const parts = startParam.split('/');
+                id = parts[0] || null;
+                name = parts.length > 1 ? parts[1] : null;
+            } else {
+                const params = new URLSearchParams(window.location.search);
+                id = params.get('sheetId');
+                name = params.get('sheetName');
+            }
+            setSheetId(id || FALLBACK_SHEET_ID);
+            setSheetName(name || DEFAULT_SHEET_NAME);
+            if (!id) console.warn(`Sheet ID not provided. Using fallback: ${FALLBACK_SHEET_ID}`);
+            if (!name) console.warn(`Sheet name not provided. Using default: '${DEFAULT_SHEET_NAME}'`);
+        } catch (err) {
+            console.error("Initialization error:", err);
+            setError("Ошибка инициализации приложения.");
+            setIsLoading(false);
+        }
+    }, []);
     
     useEffect(() => {
-        loadData();
-    }, [loadData]);
+        if (sheetId && sheetName) {
+            loadData();
+        }
+    }, [sheetId, sheetName, loadData]);
 
 
     useEffect(() => {
@@ -521,32 +535,7 @@ const App = () => {
         const payload = { items: cart.map(c => ({ name: c.name, qty: c.qty, unit: c.unit, price: c.unit === 'гр' ? c.price / 100 : c.price, total: calculateTotal(c.qty, c.price, c.unit, c.customPriceJson), })), total: cart.reduce((sum, c) => sum + calculateTotal(c.qty, c.price, c.unit, c.customPriceJson), 0), telegram_id: window.Telegram.WebApp.initDataUnsafe?.user?.id || null };
         try { window.Telegram.WebApp.sendData(JSON.stringify(payload)); window.Telegram.WebApp.close(); } catch (e) { console.error("Failed to send data:", e); alert("Не удалось отправить заказ."); }
     }, [cart]);
-
-    useEffect(() => {
-        try {
-            const tg = window.Telegram?.WebApp;
-            if (!tg || !tg.MainButton) return;
-
-            const mainButtonClickHandler = handleConfirmOrder;
-
-            if (cart.length > 0) {
-                const total = cart.reduce((sum, item) => sum + calculateTotal(item.qty, item.price, item.unit, item.customPriceJson), 0);
-                tg.MainButton.setText(`Подтвердить заказ: ${total.toFixed(0)} ₽`);
-                tg.onEvent('mainButtonClicked', mainButtonClickHandler);
-                tg.MainButton.show();
-            } else {
-                tg.MainButton.hide();
-            }
-
-            return () => {
-                tg.offEvent('mainButtonClicked', mainButtonClickHandler);
-            };
-        } catch (e) {
-            console.error("Telegram MainButton error:", e);
-        }
-    }, [cart, handleConfirmOrder]);
-
-
+    
     return e(React.Fragment, null,
         e(Header, { activeTab, onTabClick: handleTabClick, groupedItems, currentTheme, onToggleTheme: toggleTheme }),
         e('main', { ref: mainContentRef, className: 'px-4 sm:px-6 py-4 max-w-4xl mx-auto transition-[padding-bottom] duration-500 ease-in-out' },
@@ -564,13 +553,12 @@ const App = () => {
                 !isLoading && !error && !activeTab && e('div', { className: 'text-center py-10 text-gray-500 bg-white/80 dark:bg-gray-800/80 dark:text-gray-400 rounded-lg p-4 font-semibold' }, 'В меню пока нет доступных позиций.')
             )
         ),
-        e(Cart, { ref: cartRef, cart, onIncrement: handleIncrementCartItem, onDecrement: handleDecrementCartItem, onRemove: handleRemoveFromCart, isVisible: cart.length > 0 }),
+        e(Cart, { ref: cartRef, cart, onIncrement: handleIncrementCartItem, onDecrement: handleDecrementCartItem, onRemove: handleRemoveFromCart, onConfirm: handleConfirmOrder, isVisible: cart.length > 0 }),
         e(Modal, { item: modalItem, isVisible: isModalVisible, onClose: handleCloseModal, style: modalStyle })
     );
 };
 // --- End of App.js ---
 
-// --- Start of index.js (converted from index.tsx) ---
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
@@ -580,7 +568,6 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   e(React.StrictMode, null, e(App))
 );
-// --- End of index.js ---
 
 </script>
 </body>
