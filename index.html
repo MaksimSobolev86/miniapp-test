@@ -405,29 +405,34 @@ const App = () => {
                 tg.ready();
                 tg.expand();
                 tg.enableClosingConfirmation();
-                let id = null;
-                let name = null;
-                const startParam = tg?.initDataUnsafe?.start_param || null;
-                if (startParam) {
-                    const parts = startParam.split('/');
-                    id = parts[0] || null;
-                    name = parts.length > 1 ? parts[1] : 'menu'; // ← вот здесь
-                } else {
-                    const params = new URLSearchParams(window.location.search);
-                    id = params.get('sheetId');
-                    name = params.get('sheetName') || 'menu'; // ← и вот здесь
-                }
-
+            }
+    
+            let id = null;
+            let name = null;
+            const startParam = tg?.initDataUnsafe?.start_param || null;
+            if (startParam) {
+                const parts = startParam.split('/');
+                id = parts[0] || null;
+                name = parts.length > 1 ? parts[1] : 'menu';
+            } else {
+                const params = new URLSearchParams(window.location.search);
+                id = params.get('sheetId');
+                name = params.get('sheetName') || 'menu';
+            }
+    
             setSheetId(id || FALLBACK_SHEET_ID);
             setSheetName(name || DEFAULT_SHEET_NAME);
+    
             if (!id) console.warn(`Sheet ID not provided. Using fallback: ${FALLBACK_SHEET_ID}`);
             if (!name) console.warn(`Sheet name not provided. Using default: '${DEFAULT_SHEET_NAME}'`);
+            
         } catch (err) {
             console.error("Initialization error:", err);
             setError("Ошибка инициализации приложения.");
             setIsLoading(false);
         }
     }, []);
+
     
     useEffect(() => {
         if (sheetId && sheetName) {
