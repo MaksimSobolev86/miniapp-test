@@ -426,8 +426,14 @@ const App = () => {
             setSheetId(id || FALLBACK_SHEET_ID);
             setSheetName(name || DEFAULT_SHEET_NAME);
     
-            if (!id) console.warn(`Sheet ID not provided. Using fallback: ${FALLBACK_SHEET_ID}`);
-            if (!name) console.warn(`Sheet name not provided. Using default: '${DEFAULT_SHEET_NAME}'`);
+            if (!id) {
+                console.warn(`Sheet ID not provided. Using fallback: ${FALLBACK_SHEET_ID}`);
+                id = FALLBACK_SHEET_ID;
+            }
+            if (!name) {
+                console.warn(`Sheet name not provided. Using default: '${DEFAULT_SHEET_NAME}'`);
+                name = DEFAULT_SHEET_NAME;
+            }
             
         } catch (err) {
             console.error("Initialization error:", err);
