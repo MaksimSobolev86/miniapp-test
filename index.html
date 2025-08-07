@@ -393,8 +393,11 @@ const App = () => {
     useEffect(() => {
         const bgContainer = document.getElementById('background-container');
         if (bgContainer) {
-            const backgroundUrl = `${window.location.origin}/files/bakground.png`;
-            bgContainer.style.backgroundImage = `url('${backgroundUrl}')`;
+          const params = new URLSearchParams(window.location.search);
+          const bgUrl = params.get("bg");
+          if (bgUrl && bgContainer) {
+              bgContainer.style.backgroundImage = `url('${bgUrl}')`;
+          }
         }
     }, []);
 
