@@ -159,7 +159,7 @@ const THEME_ICONS = { light: e(SunIcon, { className: 'w-6 h-6' }), dark: e(MoonI
 // --- COMPONENTS ---
 const Header = ({ activeTab, onTabClick, groupedItems, currentTheme, onToggleTheme }) => {
     return e('header', { className: 'sticky top-0 z-30 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md shadow-sm' },
-        e('div', { className: 'max-w-4xl mx-auto px-4 sm:px-6' },
+        e('div', { className: 'max-w-5xl mx-auto px-4 sm:px-6' },
             e('div', { className: 'flex items-center justify-between pt-4 pb-3' },
                 e('h1', { className: 'text-xl sm:text-2xl font-bold text-gray-900 dark:text-white' }, 'Меню'),
                 e('button', { onClick: onToggleTheme, className: 'p-2 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors', 'aria-label': 'Toggle theme' }, THEME_ICONS[currentTheme])
@@ -232,7 +232,7 @@ const Cart = forwardRef(({ cart, onIncrement, onDecrement, onRemove, onConfirm, 
     const itemCountText = `${cart.length} ${getPositionText(cart.length)}`;
 
     return e('div', { ref, className: `fixed bottom-0 left-0 right-0 z-40 transition-transform duration-500 ease-in-out ${isVisible ? 'translate-y-0' : 'translate-y-full'}` },
-        e('div', { className: 'bg-white/80 dark:bg-gray-800/80 rounded-t-2xl shadow-[0_-8px_30px_rgba(0,0,0,0.15)] dark:shadow-[0_-8px_30px_rgba(0,0,0,0.3)] backdrop-blur-md' },
+        e('div', { className: 'bg-white/80 dark:bg-gray-800/80 rounded-t-2xl shadow-[0_-8px_30px_rgba(0,0,0,0.15)] dark:shadow-[0_-8px_30px_rgba(0,0,0,0.3)] backdrop-blur-md pb-2' },
             e('div', { className: 'max-w-4xl mx-auto' },
                 e('div', { onClick: onToggle, className: 'flex justify-between items-center cursor-pointer p-4 select-none' },
                     e('div', { className: 'flex items-center gap-3' },
@@ -463,7 +463,7 @@ const App = () => {
 
     return e(React.Fragment, null,
         e(Header, { activeTab, onTabClick: handleTabClick, groupedItems, currentTheme, onToggleTheme: toggleTheme }),
-        e('main', { ref: mainContentRef, className: 'flex-grow px-4 sm:px-6 py-4 max-w-4xl mx-auto w-full transition-opacity duration-150 ease-in-out pb-48' },
+        e('main', { ref: mainContentRef, className: 'flex-grow px-4 sm:px-6 py-4 max-w-5xl mx-auto w-full transition-opacity duration-150 ease-in-out pb-48' },
             error && e('div', { className: 'text-center py-10 text-red-500 bg-white/80 dark:bg-red-900/30 dark:text-red-400 rounded-lg p-4 font-semibold' },
                 e('p', null, error),
                 e('button', { onClick: loadData, className: 'mt-4 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg shadow transition-colors' }, "Повторить")
