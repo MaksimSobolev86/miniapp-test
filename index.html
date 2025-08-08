@@ -51,12 +51,15 @@
     }
     #root {
       height: 100%;
+      display: flex;
+      flex-direction: column;
     }
   </style>
 <script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@^19.1.1",
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
     "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
     "react/": "https://esm.sh/react@^19.1.1/"
   }
@@ -68,38 +71,33 @@
        class="fixed inset-0 bg-center bg-cover -z-20">
   </div>
   <div id="curtain-overlay" class="fixed inset-0 bg-[#000A22]/[0.64] backdrop-blur-sm -z-10 opacity-0 dark:opacity-100 transition-opacity duration-500 ease-in-out"></div>
-  <div id="root"></div>
+  <div id="root" class="h-full"></div>
 
 <script type="module">
-import React from 'https://esm.sh/react@18.2.0';
-import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
+import React from 'react';
+import ReactDOM from 'react-dom/client';
 
-// --- Start of lib/utils.js ---
+const { useState, useEffect, useCallback, useRef, forwardRef } = React;
+const e = React.createElement;
+
+// --- UTILS ---
 const formatDescription = (text) => {
     if (!text) return "";
     const urlRegex = /(https?:\/\/[^\s"'<>[\]]+)/g;
-    return text
-        .trim()
+    return text.trim()
         .replace(/(^|\n)([\p{Emoji_Presentation}\p{Extended_Pictographic}])/gu, '$1<br>$2')
         .replace(/•/g, '<br>•')
         .replace(/\n+/g, '<br>')
         .replace(/(<br>\s*){2,}/g, '<br><br>')
-        .replace(urlRegex, (url) => 
-            `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline">${url}</a>`
-        );
+        .replace(urlRegex, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline">${url}</a>`);
 };
-
 const getShortDescription = (text) => {
     if (!text) return "";
     const plainText = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
     if (!plainText) return "";
     const punctuationMatch = plainText.match(/[.,!?;:]/);
-    if (punctuationMatch && punctuationMatch.index !== undefined) {
-        return plainText.substring(0, punctuationMatch.index + 1);
-    }
-    return plainText;
+    return punctuationMatch && punctuationMatch.index !== undefined ? plainText.substring(0, punctuationMatch.index + 1) : plainText;
 };
-
 const normalizeImage = (url) => {
     if (!url) return "";
     if (url.includes("drive.google.com")) {
@@ -108,105 +106,73 @@ const normalizeImage = (url) => {
     }
     return url.trim();
 };
-
 const calculateTotal = (qty, price, unit, customPriceJson) => {
     if (unit === "гр") return (qty / 100) * price;
     if (customPriceJson) {
         try {
             const priceMap = JSON.parse(customPriceJson);
             if (qty === 0.5 && priceMap["0.5"] !== undefined) return priceMap["0.5"];
-        } catch (e) { /* ignore */ }
+        } catch (err) { /* ignore */ }
     }
     return qty * price;
 };
-
 const triggerHapticFeedback = (style) => {
     try {
-        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
-            window.Telegram.WebApp.HapticFeedback.impactOccurred(style);
+        const tg = window.Telegram?.WebApp;
+        if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred(style);
+    } catch (err) { console.error("Haptic feedback error:", err); }
+};
+const processData = (data) => {
+    const grouped = Object.values(CategoryKey).reduce((acc, key) => ({ ...acc, [key]: [] }), {});
+    data.forEach((item, index) => {
+        const typeRaw = item.Тип || '';
+        const normalizedType = typeRaw.trim().toLowerCase();
+        if (Object.values(CategoryKey).includes(normalizedType)) {
+            const photos = (item.Фото || '').split(',').map((url) => normalizeImage(url.trim())).filter(Boolean);
+            const step = parseFloat(item['Шаг'] || '1');
+            const minQtyRaw = parseFloat(item['Мин'] || '0');
+            const processedItem = { id: `${normalizedType}-${index}-${item.Название?.replace(/\s/g, '') || ''}`, name: item.Название || 'Без названия', type: normalizedType, description: item.Описание || '', price: parseFloat(item.Цена) || 0, unit: item['Ед. изм.']?.trim() || '', step: isNaN(step) || step <= 0 ? 1 : Math.round(step * 10) / 10, minQty: isNaN(minQtyRaw) || minQtyRaw <= 0 ? (isNaN(step) || step <= 0 ? 1 : Math.round(step * 10) / 10) : Math.round(minQtyRaw * 10) / 10, photos: photos, customPriceJson: item['Цена JSON']?.trim() || '' };
+            grouped[normalizedType].push(processedItem);
         }
-    } catch (e) {
-        console.error("Haptic feedback error:", e);
-    }
+    });
+    return { grouped };
 };
-// --- End of lib/utils.js ---
 
-// --- Start of types.js ---
-const CategoryKey = {
-    KAZAN: 'казан',
-    MANGAL: 'граммы',
-    BANQUET: 'меню',
-    BANYA: 'баня',
-    LEISURE: 'досуг',
-    DRINKS: 'напитки',
-    DESSERTS: 'десерты',
-    SETS: 'сет',
-    SERVICES: 'услуги',
-    EXTRA: 'дополнительно',
-    EVENT: 'ивент',
-    MEDIA: 'медиа',
-    FASTFOOD: 'фастфуд'
-};
-// --- End of types.js ---
-
-// --- Start of App.js ---
-const { useState, useEffect, useCallback, useRef, forwardRef } = React;
-const e = React.createElement;
+// --- TYPES ---
+const CategoryKey = { KAZAN: 'казан', MANGAL: 'граммы', BANQUET: 'меню', BANYA: 'баня', LEISURE: 'досуг', DRINKS: 'напитки', DESSERTS: 'десерты', SETS: 'сет', SERVICES: 'услуги', EXTRA: 'дополнительно', EVENT: 'ивент', MEDIA: 'медиа', FASTFOOD: 'фастфуд', ACTIVITY: 'активность' };
 
 // --- CONSTANTS ---
-const CATEGORIES = {
-    [CategoryKey.KAZAN]: "Казан",
-    [CategoryKey.MANGAL]: "Мангал",
-    [CategoryKey.BANQUET]: "Банкет",
-    [CategoryKey.BANYA]: "Баня",
-    [CategoryKey.LEISURE]: "Досуг",
-    [CategoryKey.DRINKS]: "Напитки",
-    [CategoryKey.DESSERTS]: "Десерты",
-    [CategoryKey.SETS]: "Сеты",
-    [CategoryKey.SERVICES]: "Услуги",
-    [CategoryKey.EXTRA]: "Дополнительно",
-    [CategoryKey.EVENT]: "Мероприятия",
-    [CategoryKey.MEDIA]: "Фото/видео",
-    [CategoryKey.FASTFOOD]: "Фастфуд",
-};
-
+const CATEGORIES = { [CategoryKey.KAZAN]: "Казан", [CategoryKey.MANGAL]: "Мангал", [CategoryKey.BANQUET]: "Банкет", [CategoryKey.BANYA]: "Баня", [CategoryKey.LEISURE]: "Досуг", [CategoryKey.DRINKS]: "Напитки", [CategoryKey.DESSERTS]: "Десерты", [CategoryKey.SETS]: "Сеты", [CategoryKey.SERVICES]: "Услуги", [CategoryKey.EXTRA]: "Дополнительно", [CategoryKey.EVENT]: "Мероприятия", [CategoryKey.MEDIA]: "Фото/видео", [CategoryKey.FASTFOOD]: "Фастфуд", [CategoryKey.ACTIVITY]: "Активность" };
 const FALLBACK_SHEET_ID = '1dbwpkM0DDszZfppbJbOkYrnXZyquPJi5Ynbq4a5fP04';
 const DEFAULT_SHEET_NAME = 'menu';
 
 // --- ICONS ---
-const SunIcon = ({ className }) => e('svg', { className, xmlns: 'http://www.w3.org/2000/svg', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: '2' }, e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z' }));
-const MoonIcon = ({ className }) => e('svg', { className, xmlns: 'http://www.w3.org/2000/svg', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: '2' }, e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z' }));
-const CalendarIcon = ({ className }) => e('svg', { xmlns: 'http://www.w3.org/2000/svg', viewBox: '0 0 24 24', className, fill: 'currentColor' }, e('path', { d: 'M19 3h-1V2h-2v1H8V2H6v1H5c-1.1 0-2 .9-2 2v15c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 17H5V8h14v12z' }));
-const CartIcon = ({ className }) => e('svg', { xmlns: 'http://www.w3.org/2000/svg', className, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: '2' }, e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z' }));
-const XIcon = ({ className }) => e('svg', { xmlns: 'http://www.w3.org/2000/svg', className, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: '2.5' }, e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M6 18L18 6M6 6l12 12' }));
-const PlusIcon = ({ className }) => e('svg', { xmlns: 'http://www.w3.org/2000/svg', className, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: '2' }, e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M12 4.5v15m7.5-7.5h-15' }));
-const MinusIcon = ({ className }) => e('svg', { xmlns: 'http://www.w3.org/2000/svg', className, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: '2' }, e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M19.5 12h-15' }));
+const SunIcon = ({ className }) => e('svg', { className, xmlns: 'http://www.w3.org/2000/svg', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: "2" }, e('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" }));
+const MoonIcon = ({ className }) => e('svg', { className, xmlns: 'http://www.w3.org/2000/svg', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: "2" }, e('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" }));
+const CalendarIcon = ({ className }) => e('svg', { xmlns: 'http://www.w3.org/2000/svg', viewBox: '0 0 24 24', className, fill: 'currentColor' }, e('path', { d: "M19 3h-1V2h-2v1H8V2H6v1H5c-1.1 0-2 .9-2 2v15c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 17H5V8h14v12z" }));
+const CartIcon = ({ className }) => e('svg', { xmlns: 'http://www.w3.org/2000/svg', className, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: "2" }, e('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" }));
+const XIcon = ({ className }) => e('svg', { xmlns: 'http://www.w3.org/2000/svg', className, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: "2.5" }, e('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M6 18L18 6M6 6l12 12" }));
+const PlusIcon = ({ className }) => e('svg', { xmlns: 'http://www.w3.org/2000/svg', className, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: "2" }, e('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M12 4.5v15m7.5-7.5h-15" }));
+const MinusIcon = ({ className }) => e('svg', { xmlns: 'http://www.w3.org/2000/svg', className, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: "2" }, e('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M19.5 12h-15" }));
+const ChevronUpIcon = ({ className }) => e('svg', { xmlns: 'http://www.w3.org/2000/svg', className, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: 2.5 }, e('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M5 15l7-7 7 7" }));
+const ChevronDownIcon = ({ className }) => e('svg', { xmlns: 'http://www.w3.org/2000/svg', className, fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: 2.5 }, e('path', { strokeLinecap: "round", strokeLinejoin: "round", d: "M19 9l-7 7-7-7" }));
 
-const THEME_ICONS = {
-    light: e(SunIcon, { className: 'w-6 h-6' }),
-    dark: e(MoonIcon, { className: 'w-6 h-6' })
-};
+const THEME_ICONS = { light: e(SunIcon, { className: 'w-6 h-6' }), dark: e(MoonIcon, { className: 'w-6 h-6' }) };
 
-// --- UI COMPONENTS ---
+// --- COMPONENTS ---
 const Header = ({ activeTab, onTabClick, groupedItems, currentTheme, onToggleTheme }) => {
     return e('header', { className: 'sticky top-0 z-30 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md shadow-sm' },
         e('div', { className: 'max-w-4xl mx-auto px-4 sm:px-6' },
             e('div', { className: 'flex items-center justify-between pt-4 pb-3' },
                 e('h1', { className: 'text-xl sm:text-2xl font-bold text-gray-900 dark:text-white' }, 'Меню'),
-                e('button', { onClick: onToggleTheme, className: 'p-2 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors', 'aria-label': 'Toggle theme' },
-                    THEME_ICONS[currentTheme]
-                )
+                e('button', { onClick: onToggleTheme, className: 'p-2 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors', 'aria-label': 'Toggle theme' }, THEME_ICONS[currentTheme])
             ),
             e('nav', { className: 'flex gap-2 pb-3 overflow-x-auto whitespace-nowrap no-scrollbar' },
                 Object.entries(CATEGORIES).map(([key, label]) => {
                     const categoryKey = key;
                     if (!groupedItems[categoryKey] || groupedItems[categoryKey]?.length === 0) return null;
                     const isActive = activeTab === categoryKey;
-                    return e('button', {
-                        key,
-                        onClick: () => onTabClick(categoryKey),
-                        className: `py-2 px-3 sm:px-4 rounded-full text-sm sm:text-base font-semibold transition-colors duration-300 ${isActive ? 'bg-black dark:bg-white text-white dark:text-black shadow' : 'bg-gray-200/60 dark:bg-gray-700/60 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'}`
-                    }, label);
+                    return e('button', { key, onClick: () => onTabClick(categoryKey), className: `py-2 px-3 sm:px-4 rounded-full text-sm sm:text-base font-semibold transition-colors duration-300 ${isActive ? 'bg-black dark:bg-white text-white dark:text-black shadow' : 'bg-gray-200/60 dark:bg-gray-700/60 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'}` }, label);
                 })
             )
         )
@@ -225,58 +191,87 @@ const SkeletonCard = () => e('div', { className: 'flex items-start bg-white/80 d
 const ItemCard = ({ item, index, onAddToCart, onViewDetails, onViewBanquetMenu }) => {
     const { name, type, description, price, unit, photos } = item;
     const isBanquetMenu = type === CategoryKey.BANQUET || name.toLowerCase().includes('банкет');
+    const isEvent = type === CategoryKey.EVENT;
     const shortDescription = getShortDescription(description);
-    const mediaHTML = type === CategoryKey.BANQUET
-        ? e('div', { className: 'bg-gray-100 dark:bg-gray-700 flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-xl mr-2 sm:mr-4 flex-shrink-0' }, e(CalendarIcon, { className: 'w-8 h-8 sm:w-10 sm:h-10 text-gray-500 dark:text-gray-400' }))
-        : e('img', { src: photos[0] || 'https://picsum.photos/80/80', alt: name, className: 'w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover mr-2 sm:mr-4 flex-shrink-0 cursor-pointer hover:scale-105 transition-transform duration-200', loading: 'lazy', onClick: (ev) => onViewDetails(item, ev) });
     const baseBtn = 'px-4 py-2.5 rounded-lg text-sm sm:text-base font-semibold shadow-md transition-transform transform hover:scale-105 flex items-center justify-center';
-    let buttonsHTML;
+
+    const mediaElement = type === CategoryKey.BANQUET
+        ? e('div', { className: 'bg-gray-100 dark:bg-gray-700 flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-xl mr-2 sm:mr-4 flex-shrink-0' }, e(CalendarIcon, { className: 'w-8 h-8 sm:w-10 sm:h-10 text-gray-500 dark:text-gray-400' }))
+        : e('img', { src: photos[0] || `https://picsum.photos/80/80?random=${index}`, alt: name, className: 'w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover mr-2 sm:mr-4 flex-shrink-0 cursor-pointer hover:scale-105 transition-transform duration-200', loading: 'lazy', onClick: (ev) => onViewDetails(item, ev) });
+    
+    let actionButton;
     if (isBanquetMenu) {
-        buttonsHTML = e('button', { onClick: () => onViewBanquetMenu(item), className: `${baseBtn} bg-yellow-500 hover:bg-yellow-600 text-white` }, 'Посмотреть');
+        actionButton = e('button', { onClick: () => onViewBanquetMenu(item), className: `${baseBtn} bg-yellow-500 hover:bg-yellow-600 text-white` }, 'Посмотреть');
+    } else if (isEvent) {
+        actionButton = e('button', { onClick: (e) => onViewDetails(item, e), className: `${baseBtn} bg-green-500 hover:bg-green-600 text-white` }, 'Подробнее');
     } else {
-        buttonsHTML = e('button', { onClick: () => onAddToCart(item), className: `${baseBtn} bg-blue-500 hover:bg-blue-600 text-white` }, e(CartIcon, { className: 'h-4 w-4 sm:h-5 sm:w-5 mr-1.5' }), ' Добавить');
+        actionButton = e('button', { onClick: () => onAddToCart(item), className: `${baseBtn} bg-blue-500 hover:bg-blue-600 text-white` }, e(CartIcon, { className: 'h-4 w-4 sm:h-5 sm:w-5 mr-1.5' }), ' Добавить');
     }
+
     return e('div', { className: 'flex items-start bg-white/90 dark:bg-gray-800/90 shadow-lg rounded-xl p-3 sm:p-4 gap-3 sm:gap-4 backdrop-blur-sm transition-all duration-300 ease-in-out hover:shadow-xl hover:-translate-y-1 animate-fly-in-up', style: { animationDelay: `${index * 70}ms` } },
-        mediaHTML,
+        mediaElement,
         e('div', { className: 'flex-1 min-w-0' },
             e('h3', { className: 'font-semibold text-base sm:text-lg mb-1 text-gray-900 dark:text-white' }, name),
             shortDescription && e('p', { className: 'text-gray-500 dark:text-gray-400 text-xs sm:text-sm mb-2 truncate' }, shortDescription),
-            !isBanquetMenu && price > 0 && e('div', { className: 'mb-3 text-base sm:text-lg font-semibold text-black dark:text-white' }, `${price} ₽ `, unit && e('span', { className: 'text-xs sm:text-sm font-normal text-gray-600 dark:text-gray-400' }, `/ ${unit}`)),
-            e('div', { className: 'flex items-center flex-wrap gap-2' }, buttonsHTML)
+            !isBanquetMenu && !isEvent && price > 0 && e('div', { className: 'mb-3 text-base sm:text-lg font-semibold text-black dark:text-white' },
+                `${price} ₽ `,
+                unit && e('span', { className: 'text-xs sm:text-sm font-normal text-gray-600 dark:text-gray-400' }, `/ ${unit}`)
+            ),
+            e('div', { className: 'flex items-center flex-wrap gap-2' }, actionButton)
         )
     );
 };
 
-const Cart = forwardRef(({ cart, onIncrement, onDecrement, onRemove, onConfirm, isVisible }, ref) => {
+const Cart = forwardRef(({ cart, onIncrement, onDecrement, onRemove, onConfirm, isVisible, isExpanded, onToggle }, ref) => {
     const total = cart.reduce((sum, item) => sum + calculateTotal(item.qty, item.price, item.unit, item.customPriceJson), 0);
+    const getPositionText = (count) => {
+        const lastDigit = count % 10;
+        const lastTwoDigits = count % 100;
+        if (lastTwoDigits >= 11 && lastTwoDigits <= 19) return 'позиций';
+        if (lastDigit === 1) return 'позиция';
+        if (lastDigit >= 2 && lastDigit <= 4) return 'позиции';
+        return 'позиций';
+    };
+    const itemCountText = `${cart.length} ${getPositionText(cart.length)}`;
+
     return e('div', { ref, className: `fixed bottom-0 left-0 right-0 z-40 transition-transform duration-500 ease-in-out ${isVisible ? 'translate-y-0' : 'translate-y-full'}` },
-        e('div', { className: 'bg-white/80 dark:bg-gray-800/80 rounded-t-2xl shadow-[0_-8px_30px_rgba(0,0,0,0.15)] dark:shadow-[0_-8px_30px_rgba(0,0,0,0.3)] p-4 backdrop-blur-md' },
+        e('div', { className: 'bg-white/80 dark:bg-gray-800/80 rounded-t-2xl shadow-[0_-8px_30px_rgba(0,0,0,0.15)] dark:shadow-[0_-8px_30px_rgba(0,0,0,0.3)] backdrop-blur-md' },
             e('div', { className: 'max-w-4xl mx-auto' },
-                e('h2', { className: 'font-bold text-lg sm:text-xl mb-3 px-2 text-gray-900 dark:text-white' }, 'Корзина'),
-                e('div', { className: 'text-sm text-gray-800 dark:text-gray-200 space-y-3 px-2 max-h-[150px] overflow-y-auto no-scrollbar' },
-                    cart.map((item) => e('div', { key: item.id, className: 'flex justify-between items-center gap-4' },
-                        e('div', { className: 'flex-1 min-w-0' },
-                            e('span', { className: 'font-semibold block truncate' }, item.name)
-                        ),
-                        e('div', { className: 'flex items-center gap-3 sm:gap-4' },
-                            e('div', { className: 'flex items-center gap-2 bg-gray-100 dark:bg-gray-700 rounded-full p-1' },
-                                e('button', { onClick: () => onDecrement(item.id), className: 'p-1 text-gray-700 dark:text-gray-300' }, e(MinusIcon, { className: 'w-4 h-4' })),
-                                e('div', { className: 'flex flex-col items-center justify-center w-12' },
-                                    e('span', { className: 'font-medium text-sm tabular-nums leading-none' }, item.qty),
-                                    item.unit && e('span', { className: 'text-[10px] text-gray-500 dark:text-gray-400 leading-none uppercase' }, item.unit)
-                                ),
-                                e('button', { onClick: () => onIncrement(item.id), className: 'p-1 text-gray-700 dark:text-gray-300' }, e(PlusIcon, { className: 'w-4 h-4' }))
-                            ),
-                            e('div', { className: 'w-20 text-right font-semibold' }, `${calculateTotal(item.qty, item.price, item.unit, item.customPriceJson).toFixed(0)} ₽`),
-                            e('button', { onClick: () => onRemove(item.id), className: 'text-red-500 hover:text-red-700 dark:hover:text-red-400 p-1.5' }, e(XIcon, { className: 'h-5 w-5' }))
-                        )
-                    ))
+                e('div', { onClick: onToggle, className: 'flex justify-between items-center cursor-pointer p-4 select-none' },
+                    e('div', { className: 'flex items-center gap-3' },
+                        e('h2', { className: 'font-bold text-lg sm:text-xl text-gray-900 dark:text-white' }, 'Корзина'),
+                        e('span', { className: 'text-sm text-gray-500 dark:text-gray-400 font-medium bg-gray-200/60 dark:bg-gray-700/60 px-2 py-0.5 rounded-full' }, itemCountText)
+                    ),
+                    e('div', { className: 'flex items-center gap-3 text-gray-900 dark:text-white' },
+                        e('span', { className: 'font-bold text-lg' }, `${total.toFixed(0)} ₽`),
+                        isExpanded ? e(ChevronDownIcon, { className: 'w-6 h-6 text-gray-500 dark:text-gray-400' }) : e(ChevronUpIcon, { className: 'w-6 h-6 text-gray-500 dark:text-gray-400' })
+                    )
                 ),
-                 e('div', { className: 'pt-4 mt-2 border-t border-gray-200 dark:border-gray-700' },
-                    e('button', { 
-                        onClick: onConfirm, 
-                        className: 'bg-blue-500 hover:bg-blue-600 text-white text-base sm:text-lg w-full py-3 sm:py-3.5 rounded-xl shadow-lg transition-transform transform hover:scale-[1.02]' 
-                    }, `Подтвердить заказ: ${total.toFixed(0)} ₽`)
+                e('div', { className: `transition-all duration-300 ease-in-out overflow-hidden ${isExpanded ? 'max-h-[50vh]' : 'max-h-0'}` },
+                    e('div', { className: 'px-4 pb-4 border-t border-gray-200 dark:border-gray-700/50' },
+                        e('div', { className: 'text-sm text-gray-800 dark:text-gray-200 max-h-[calc(50vh-120px)] overflow-y-auto no-scrollbar divide-y divide-gray-200 dark:divide-gray-700/50' },
+                            cart.map(item => e('div', { key: item.id, className: 'flex justify-between items-center gap-4 py-3' },
+                                e('div', { className: 'flex items-center gap-4 flex-1 min-w-0' },
+                                    e('div', { className: 'flex-1 min-w-0' }, e('span', { className: 'font-semibold block truncate' }, item.name)),
+                                    e('div', { className: 'font-semibold whitespace-nowrap flex-shrink-0' }, `${calculateTotal(item.qty, item.price, item.unit, item.customPriceJson).toFixed(0)} ₽`)
+                                ),
+                                e('div', { className: 'flex items-center gap-3 sm:gap-4 flex-shrink-0' },
+                                    e('div', { className: 'flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-full p-1' },
+                                        e('button', { onClick: () => onDecrement(item.id), className: 'p-1 text-gray-700 dark:text-gray-300 rounded-full' }, e(MinusIcon, { className: 'w-4 h-4' })),
+                                        e('div', { className: 'flex flex-col items-center justify-center w-12 text-center' },
+                                            e('span', { className: 'font-medium text-sm tabular-nums leading-none' }, item.qty),
+                                            item.unit && e('span', { className: 'text-[10px] text-gray-500 dark:text-gray-400 leading-none uppercase' }, item.unit)
+                                        ),
+                                        e('button', { onClick: () => onIncrement(item.id), className: 'p-1 text-gray-700 dark:text-gray-300 rounded-full' }, e(PlusIcon, { className: 'w-4 h-4' }))
+                                    ),
+                                    e('button', { onClick: () => onRemove(item.id), className: 'text-red-500 hover:text-red-700 dark:hover:text-red-400 p-1.5 -mr-1.5' }, e(XIcon, { className: 'h-5 w-5' }))
+                                )
+                            ))
+                        ),
+                        e('div', { className: 'pt-4' },
+                            e('button', { onClick: onConfirm, className: 'bg-blue-500 hover:bg-blue-600 text-white text-base sm:text-lg w-full py-3 sm:py-3.5 rounded-xl shadow-lg transition-transform transform hover:scale-[1.02]' }, `Подтвердить заказ: ${total.toFixed(0)} ₽`)
+                        )
+                    )
                 )
             )
         )
@@ -286,48 +281,25 @@ const Cart = forwardRef(({ cart, onIncrement, onDecrement, onRemove, onConfirm, 
 const Modal = ({ item, isVisible, onClose, style }) => {
     const contentRef = useRef(null);
     useEffect(() => {
-        if (isVisible && contentRef.current) {
-            contentRef.current.scrollTop = 0;
-        }
+        if (isVisible && contentRef.current) contentRef.current.scrollTop = 0;
     }, [isVisible]);
-
     if (!item) return null;
-
     const formattedHtml = formatDescription(item.description);
-    const imagesHtml = item.photos.map((url, index) => e('img', { key: index, src: url, className: 'w-full h-auto rounded-xl object-cover mt-4', alt: 'Фото', loading: 'lazy' }));
-
     return e('div', { className: `fixed inset-0 bg-black/60 dark:bg-black/75 flex items-center justify-center z-50 p-4 transition-opacity duration-500 ease-in-out ${isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`, onClick: onClose },
-        e('div', { style, className: `relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-xl w-full m-4 flex flex-col max-h-[90vh] transition-all duration-500 ease-in-out ${isVisible ? 'scale-100 opacity-100' : 'scale-0 opacity-0'}`, onClick: (ev) => ev.stopPropagation() },
-            e('header', { className: 'sticky top-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md p-4 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 z-10 rounded-t-2xl' },
-                e('h3', { className: 'font-bold text-2xl text-gray-900 dark:text-white pr-4' }, item.name),
-                e('button', { onClick: onClose, className: 'p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors flex-shrink-0', 'aria-label': 'Закрыть' }, e(XIcon, { className: 'h-6 w-6' }))
+        e('div', { style, className: `relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-3xl w-full m-4 flex flex-col max-h-[90vh] transition-all duration-500 ease-in-out ${isVisible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`, onClick: (ev) => ev.stopPropagation() },
+            e('header', { className: 'relative sticky top-0 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md p-4 border-b border-gray-200 dark:border-gray-700 z-10 rounded-t-2xl' },
+                e('h3', { className: 'font-bold text-2xl text-gray-900 dark:text-white pr-12' }, item.name),
+                e('button', { onClick: onClose, className: 'absolute top-4 right-4 p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white transition-colors', 'aria-label': 'Закрыть' }, e(XIcon, { className: 'h-6 w-6' }))
             ),
             e('div', { ref: contentRef, className: 'overflow-y-auto px-6 py-4' },
                 e('div', { className: 'whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300 leading-relaxed', dangerouslySetInnerHTML: { __html: formattedHtml } }),
-                e('div', { className: 'mt-4 space-y-4' }, imagesHtml)
+                e('div', { className: 'mt-4 space-y-4' }, item.photos.map((url, index) => e('img', { key: index, src: url, className: 'w-full h-auto rounded-xl object-cover', alt: `Фото ${index + 1}`, loading: 'lazy' })))
             )
         )
     );
 };
 
-// --- DATA PROCESSING ---
-const processData = (data) => {
-    const grouped = Object.values(CategoryKey).reduce((acc, key) => ({ ...acc, [key]: [] }), {});
-    data.forEach((item, index) => {
-        const typeRaw = item.Тип || '';
-        const normalizedType = typeRaw.trim().toLowerCase();
-        if (Object.values(CategoryKey).includes(normalizedType)) {
-            const photos = (item.Фото || '').split(',').map((url) => normalizeImage(url.trim())).filter((url) => url);
-            const step = parseFloat(item['Шаг'] || '1');
-            const minQtyRaw = parseFloat(item['Мин'] || '0');
-            const processedItem = { id: `${normalizedType}-${index}-${item.Название.replace(/\s/g, '')}`, name: item.Название || 'Без названия', type: normalizedType, description: item.Описание || '', price: parseFloat(item.Цена) || 0, unit: item['Ед. изм.']?.trim() || '', step: isNaN(step) || step <= 0 ? 1 : Math.round(step * 10) / 10, minQty: isNaN(minQtyRaw) || minQtyRaw <= 0 ? (isNaN(step) || step <= 0 ? 1 : Math.round(step * 10) / 10) : Math.round(minQtyRaw * 10) / 10, photos: photos, customPriceJson: item['Цена JSON']?.trim() || '' };
-            grouped[normalizedType].push(processedItem);
-        }
-    });
-    return { grouped };
-};
-
-// --- MAIN APP COMPONENT ---
+// --- APP ---
 const App = () => {
     const [sheetId, setSheetId] = useState(null);
     const [sheetName, setSheetName] = useState(null);
@@ -336,6 +308,7 @@ const App = () => {
     const [groupedItems, setGroupedItems] = useState(Object.values(CategoryKey).reduce((acc, key) => ({ ...acc, [key]: [] }), {}));
     const [activeTab, setActiveTab] = useState(null);
     const [cart, setCart] = useState([]);
+    const [isCartExpanded, setIsCartExpanded] = useState(true);
     const [modalItem, setModalItem] = useState(null);
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [modalStyle, setModalStyle] = useState({});
@@ -348,43 +321,26 @@ const App = () => {
         setCurrentTheme(themeName);
         document.documentElement.classList.toggle('dark', themeName === 'dark');
     }, []);
-
     const toggleTheme = () => { isAutoMode.current = false; triggerHapticFeedback('light'); applyTheme(currentTheme === 'light' ? 'dark' : 'light'); };
+    const handleToggleCart = () => { setIsCartExpanded(prev => !prev); triggerHapticFeedback('light'); };
 
     const loadData = useCallback(async () => {
         if (!sheetId || !sheetName) return;
         setIsLoading(true);
         setError(null);
         try {
-            const encodedSheetName = encodeURIComponent(sheetName);
-            const url = `https://opensheet.elk.sh/${sheetId}/${encodedSheetName}`;
+            const url = `https://opensheet.elk.sh/${sheetId}/${encodeURIComponent(sheetName)}`;
             const response = await fetch(url);
             const data = await response.json();
-            if (!response.ok) {
-                if (data && data.error) {
-                    let detailedError = `Ошибка от API таблицы: ${data.error}.`;
-                    if (data.error.toLowerCase().includes("not found")) {
-                        detailedError = `Не удалось найти таблицу с названием "${sheetName}". Убедитесь, что она опубликована и название указано верно.`;
-                    }
-                    throw new Error(detailedError);
-                }
-                throw new Error(`Ошибка сети при загрузке меню (Статус: ${response.status}).`);
-            }
-
-            if (!Array.isArray(data) || data.length === 0) {
-                throw new Error("Таблица пуста или не содержит данных.");
-            }
-
+            if (!response.ok) throw new Error(data?.error ? `API Error: ${data.error}` : `Network Error: ${response.status}`);
+            if (!Array.isArray(data) || data.length === 0) throw new Error("Sheet is empty or contains no data.");
             const { grouped } = processData(data);
             setGroupedItems(grouped);
-            const firstCategoryWithItems = (Object.keys(CATEGORIES)).find(
-                (key) => grouped[key] && grouped[key].length > 0
-            );
+            const firstCategoryWithItems = Object.keys(CATEGORIES).find(key => grouped[key]?.length > 0);
             setActiveTab(firstCategoryWithItems || null);
         } catch (err) {
             console.error(err);
-            const errorMessage = err instanceof Error ? err.message : "Не удалось загрузить меню. Попробуйте позже.";
-            setError(errorMessage);
+            setError(err.message || "Failed to load menu. Please try again later.");
         } finally {
             setIsLoading(false);
         }
@@ -392,197 +348,146 @@ const App = () => {
 
     useEffect(() => {
         const bgContainer = document.getElementById('background-container');
-        if (bgContainer) {
-          const params = new URLSearchParams(window.location.search);
-          const bgUrl = params.get("bg");
-          if (bgUrl && bgContainer) {
-              bgContainer.style.backgroundImage = `url('${bgUrl}')`;
-          }
-        }
+        const bgUrl = new URLSearchParams(window.location.search).get("bg");
+        if (bgUrl && bgContainer) bgContainer.style.backgroundImage = `url('${bgUrl}')`;
     }, []);
 
     useEffect(() => {
         try {
             const tg = window.Telegram?.WebApp;
-            if (tg) {
-                tg.ready();
-                tg.expand();
-                tg.enableClosingConfirmation();
-            }
-    
-            let id = null;
-            let name = null;
-            const startParam = tg?.initDataUnsafe?.start_param || null;
+            if (tg) { tg.ready(); tg.expand(); tg.enableClosingConfirmation(); }
+            const startParam = tg?.initDataUnsafe?.start_param;
+            let id, name;
             if (startParam) {
-                const parts = startParam.split('/');
-                id = parts[0] || null;
-                name = parts.length > 1 ? parts[1] : 'menu';
+                [id, name] = startParam.split('/');
             } else {
                 const params = new URLSearchParams(window.location.search);
                 id = params.get('sheetId');
-                name = params.get('sheetName') || 'menu';
+                name = params.get('sheetName');
             }
-    
             setSheetId(id || FALLBACK_SHEET_ID);
             setSheetName(name || DEFAULT_SHEET_NAME);
-    
-            if (!id) {
-                console.warn(`Sheet ID not provided. Using fallback: ${FALLBACK_SHEET_ID}`);
-                id = FALLBACK_SHEET_ID;
-            }
-            if (!name) {
-                console.warn(`Sheet name not provided. Using default: '${DEFAULT_SHEET_NAME}'`);
-                name = DEFAULT_SHEET_NAME;
-            }
-            
+            if (!id) console.warn(`Sheet ID not provided. Using fallback: ${FALLBACK_SHEET_ID}`);
         } catch (err) {
             console.error("Initialization error:", err);
-            setError("Ошибка инициализации приложения.");
+            setError("Error initializing application.");
             setIsLoading(false);
         }
     }, []);
 
-    
     useEffect(() => {
-        if (sheetId && sheetName) {
-            loadData();
-        }
+        if (sheetId && sheetName) loadData();
     }, [sheetId, sheetName, loadData]);
 
-
     useEffect(() => {
-        const syncThemeWithTelegram = () => {
-            try {
-                applyTheme(window.Telegram.WebApp.colorScheme);
-            } catch (err) {
-                const hour = new Date().getHours();
-                applyTheme((hour >= 18 || hour < 8) ? 'dark' : 'light');
-            }
+        const syncTheme = () => {
+            const tg = window.Telegram?.WebApp;
+            applyTheme(tg?.colorScheme === 'dark' ? 'dark' : 'light');
         };
-        try {
-            window.Telegram.WebApp.onEvent('themeChanged', () => { if (isAutoMode.current) { syncThemeWithTelegram(); } });
-        } catch (e) { console.warn("Telegram WebApp not found, running in browser mode."); }
-        syncThemeWithTelegram();
+        const tg = window.Telegram?.WebApp;
+        if (tg) tg.onEvent('themeChanged', () => { if (isAutoMode.current) syncTheme(); });
+        syncTheme();
     }, [applyTheme]);
-
-    useEffect(() => {
-        const mainEl = mainContentRef.current;
-        const cartEl = cartRef.current;
-        if (mainEl && cartEl) {
-            const cartHeight = cart.length > 0 ? cartEl.offsetHeight : 0;
-            mainEl.style.paddingBottom = `${cartHeight > 0 ? cartHeight + 16 : 16}px`;
-        }
-    }, [cart]);
 
     const handleTabClick = (key) => {
         const main = mainContentRef.current;
-        if (main) { main.classList.add('opacity-0'); setTimeout(() => { setActiveTab(key); main.classList.remove('opacity-0'); }, 150); } else { setActiveTab(key); }
+        if (main) {
+            main.classList.add('opacity-0');
+            setTimeout(() => { setActiveTab(key); main.classList.remove('opacity-0'); }, 150);
+        } else { setActiveTab(key); }
     };
-
+    
     const handleAddToCart = (item) => {
         triggerHapticFeedback('light');
-        setCart(prevCart => {
-            const existingItem = prevCart.find(cartItem => cartItem.id === item.id);
-            if (existingItem) {
-                return prevCart.map(cartItem =>
-                    cartItem.id === item.id ? { ...cartItem, qty: Math.round((cartItem.qty + cartItem.step) * 10) / 10 } : cartItem
-                );
-            } else {
-                return [...prevCart, { id: item.id, name: item.name, qty: item.minQty, price: item.price, unit: item.unit, customPriceJson: item.customPriceJson, step: item.step, minQty: item.minQty }];
-            }
+        if (cart.length === 0) setIsCartExpanded(true);
+        setCart(prev => {
+            const existing = prev.find(i => i.id === item.id);
+            if (existing) return prev.map(i => i.id === item.id ? { ...i, qty: Math.round((i.qty + i.step) * 10) / 10 } : i);
+            return [...prev, { id: item.id, name: item.name, qty: item.minQty, price: item.price, unit: item.unit, customPriceJson: item.customPriceJson, step: item.step, minQty: item.minQty }];
         });
     };
     
     const handleIncrementCartItem = (itemId) => {
         triggerHapticFeedback('light');
-        setCart(cart => cart.map(item => item.id === itemId ? { ...item, qty: Math.round((item.qty + item.step) * 10) / 10 } : item));
+        setCart(cart.map(item => item.id === itemId ? { ...item, qty: Math.round((item.qty + item.step) * 10) / 10 } : item));
     };
-
+    
     const handleDecrementCartItem = (itemId) => {
         triggerHapticFeedback('light');
-        setCart(cart => {
-            const targetItem = cart.find(item => item.id === itemId);
-            if (!targetItem) return cart;
-            const newQty = Math.round((targetItem.qty - targetItem.step) * 10) / 10;
-            if (newQty < targetItem.minQty) {
-                return cart.filter(item => item.id !== itemId);
-            }
-            return cart.map(item => item.id === itemId ? { ...item, qty: newQty } : item);
+        setCart(current => {
+            const item = current.find(i => i.id === itemId);
+            if (!item) return current;
+            const newQty = Math.round((item.qty - item.step) * 10) / 10;
+            return newQty < item.minQty ? current.filter(i => i.id !== itemId) : current.map(i => i.id === itemId ? { ...i, qty: newQty } : i);
         });
     };
     
     const handleRemoveFromCart = (itemId) => {
-        triggerHapticFeedback('light');
-        setCart(prevCart => prevCart.filter(item => item.id !== itemId));
+        triggerHapticFeedback('medium');
+        setCart(prev => prev.filter(item => item.id !== itemId));
     };
-
+    
     const handleViewDetails = (item, event) => {
         const rect = event.currentTarget.getBoundingClientRect();
-        const style = { transformOrigin: `${rect.left + rect.width / 2}px ${rect.top + rect.height / 2}px` };
-        setModalStyle(style);
+        setModalStyle({ transformOrigin: `${rect.left + rect.width / 2}px ${rect.top + rect.height / 2}px` });
         setModalItem(item);
         document.body.style.overflow = 'hidden';
-        requestAnimationFrame(() => { setIsModalVisible(true); });
+        requestAnimationFrame(() => setIsModalVisible(true));
     };
     
     const handleCloseModal = () => {
         setIsModalVisible(false);
-        setTimeout(() => {
-            setModalItem(null);
-            document.body.style.overflow = 'unset';
-            setModalStyle({});
-        }, 500);
+        setTimeout(() => { setModalItem(null); document.body.style.overflow = 'unset'; setModalStyle({}); }, 500);
     };
-
+    
     const handleViewBanquetMenu = (item) => {
         const photoUrl = item.photos[0] || '';
         if (!photoUrl) { alert("Ссылка не найдена"); return; }
-        const rawUrl = photoUrl
-            .replace("https://github.com/", "https://raw.githubusercontent.com/")
-            .replace("/blob/", "/");
+        const rawUrl = photoUrl.replace("https://github.com/", "https://raw.githubusercontent.com/").replace("/blob/", "/");
         window.open(rawUrl, "_blank");
     };
-
+    
     const handleConfirmOrder = useCallback(() => {
         if (cart.length === 0) return;
-        triggerHapticFeedback('medium');
-        const payload = { items: cart.map(c => ({ name: c.name, qty: c.qty, unit: c.unit, price: c.unit === 'гр' ? c.price / 100 : c.price, total: calculateTotal(c.qty, c.price, c.unit, c.customPriceJson), })), total: cart.reduce((sum, c) => sum + calculateTotal(c.qty, c.price, c.unit, c.customPriceJson), 0), telegram_id: window.Telegram.WebApp.initDataUnsafe?.user?.id || null };
-        try { window.Telegram.WebApp.sendData(JSON.stringify(payload)); window.Telegram.WebApp.close(); } catch (e) { console.error("Failed to send data:", e); alert("Не удалось отправить заказ."); }
+        triggerHapticFeedback('heavy');
+        const payload = {
+            items: cart.map(c => ({ name: c.name, qty: c.qty, unit: c.unit, price: c.unit === 'гр' ? c.price / 100 : c.price, total: calculateTotal(c.qty, c.price, c.unit, c.customPriceJson) })),
+            total: cart.reduce((sum, c) => sum + calculateTotal(c.qty, c.price, c.unit, c.customPriceJson), 0),
+            telegram_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id || null
+        };
+        try {
+            window.Telegram.WebApp.sendData(JSON.stringify(payload));
+            window.Telegram.WebApp.close();
+        } catch (err) {
+            console.error("Failed to send data:", err);
+            alert("Не удалось отправить заказ.");
+        }
     }, [cart]);
-    
+
     return e(React.Fragment, null,
         e(Header, { activeTab, onTabClick: handleTabClick, groupedItems, currentTheme, onToggleTheme: toggleTheme }),
-        e('main', { ref: mainContentRef, className: 'px-4 sm:px-6 py-4 max-w-4xl mx-auto transition-[padding-bottom] duration-500 ease-in-out' },
-            error && e('div', { className: 'text-center py-10 text-red-500 bg-white/80 dark:bg-red-900/30 dark:text-red-400 rounded-lg p-4 font-semibold' }, 
+        e('main', { ref: mainContentRef, className: 'flex-grow px-4 sm:px-6 py-4 max-w-4xl mx-auto w-full transition-opacity duration-150 ease-in-out pb-48' },
+            error && e('div', { className: 'text-center py-10 text-red-500 bg-white/80 dark:bg-red-900/30 dark:text-red-400 rounded-lg p-4 font-semibold' },
                 e('p', null, error),
-                e('button', {
-                    onClick: loadData,
-                    className: "mt-4 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg shadow transition-colors"
-                }, "Повторить")
+                e('button', { onClick: loadData, className: 'mt-4 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg shadow transition-colors' }, "Повторить")
             ),
             e('div', { className: 'space-y-4' },
                 isLoading
                     ? Array.from({ length: 5 }).map((_, i) => e(SkeletonCard, { key: i }))
-                    : (activeTab && groupedItems[activeTab]?.map((item, index) => e(ItemCard, { key: item.id, item, index, onAddToCart: handleAddToCart, onViewDetails: handleViewDetails, onViewBanquetMenu: handleViewBanquetMenu }))),
-                !isLoading && !error && !activeTab && e('div', { className: 'text-center py-10 text-gray-500 bg-white/80 dark:bg-gray-800/80 dark:text-gray-400 rounded-lg p-4 font-semibold' }, 'В меню пока нет доступных позиций.')
-            )
+                    : (activeTab && groupedItems[activeTab]?.map((item, index) => e(ItemCard, { key: item.id, item, index, onAddToCart, onViewDetails, onViewBanquetMenu })))
+            ),
+            !isLoading && !error && !activeTab && e('div', { className: 'text-center py-10 text-gray-500 bg-white/80 dark:bg-gray-800/80 dark:text-gray-400 rounded-lg p-4 font-semibold' }, 'В меню пока нет доступных позиций.')
         ),
-        e(Cart, { ref: cartRef, cart, onIncrement: handleIncrementCartItem, onDecrement: handleDecrementCartItem, onRemove: handleRemoveFromCart, onConfirm: handleConfirmOrder, isVisible: cart.length > 0 }),
+        e(Cart, { ref: cartRef, cart, onIncrement: handleIncrementCartItem, onDecrement: handleDecrementCartItem, onRemove: handleRemoveFromCart, onConfirm: handleConfirmOrder, isVisible: cart.length > 0, isExpanded: isCartExpanded, onToggle: handleToggleCart }),
         e(Modal, { item: modalItem, isVisible: isModalVisible, onClose: handleCloseModal, style: modalStyle })
     );
 };
-// --- End of App.js ---
 
 const rootElement = document.getElementById('root');
-if (!rootElement) {
-  throw new Error("Could not find root element to mount to");
-}
-
+if (!rootElement) throw new Error("Could not find root element to mount to");
 const root = ReactDOM.createRoot(rootElement);
-root.render(
-  e(React.StrictMode, null, e(App))
-);
-
+root.render(e(React.StrictMode, null, e(App)));
 </script>
+
 </body>
 </html>
