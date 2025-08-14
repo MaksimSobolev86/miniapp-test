@@ -57,8 +57,9 @@
 <script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@18.2.0",
-    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client"
+    "react": "https://esm.sh/react@^19.1.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
+    "react/": "https://esm.sh/react@^19.1.1/"
   }
 }
 </script>
@@ -71,8 +72,8 @@
   <div id="root" class="h-full"></div>
 
 <script type="module">
-import React from 'react';
-import ReactDOM from 'react-dom/client';
+import React from 'https://esm.sh/react@18.2.0';
+import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
 
 const { useState, useEffect, useCallback, useRef, forwardRef } = React;
 const e = React.createElement;
@@ -360,9 +361,7 @@ const App = () => {
         setCurrentTheme(themeName);
         document.documentElement.classList.toggle('dark', themeName === 'dark');
     }, []);
-    const toggleTheme = () => { isAutoMode.current = false; triggerHapticFeedback('light'); applyTheme(currentTheme === 'light' ? 'dark' : 'light'); };
-    const handleToggleCart = () => { setIsCartExpanded(prev => !prev); triggerHapticFeedback('light'); };
-
+    
     const loadData = useCallback(async () => {
         if (!sheetId || !sheetName) return;
         setIsLoading(true);
@@ -387,8 +386,13 @@ const App = () => {
 
     useEffect(() => {
         const bgContainer = document.getElementById('background-container');
-        const bgUrl = new URLSearchParams(window.location.search).get("bg");
-        if (bgUrl && bgContainer) bgContainer.style.backgroundImage = `url('${bgUrl}')`;
+        const bgUrlFromParams = new URLSearchParams(window.location.search).get("bg");
+        // Use environment variable as a fallback to the URL parameter `bg`.
+        const bgUrl = bgUrlFromParams || (typeof process !== 'undefined' && process.env.MINI_APP_BG_URL);
+
+        if (bgUrl && bgContainer) {
+            bgContainer.style.backgroundImage = `url('${bgUrl}')`;
+        }
     }, []);
 
     useEffect(() => {
@@ -416,7 +420,7 @@ const App = () => {
 
     useEffect(() => {
         if (sheetId && sheetName) loadData();
-    }, [sheetId, sheetName, loadData]);
+    }, [loadData, sheetId, sheetName]);
 
     useEffect(() => {
         const syncTheme = () => {
@@ -429,7 +433,17 @@ const App = () => {
     }, [applyTheme]);
     
     const handleSearchChange = (e) => setSearchQuery(e.target.value);
-    const handleCommentChange = (e) => setOrderComment(e.target.value);
+    
+    const handleToggleTheme = () => {
+        isAutoMode.current = false;
+        triggerHapticFeedback('light');
+        applyTheme(currentTheme === 'light' ? 'dark' : 'light');
+    };
+
+    const handleToggleCart = () => {
+        setIsCartExpanded(prev => !prev);
+        triggerHapticFeedback('light');
+    };
 
     const handleTabClick = (key) => {
         const main = mainContentRef.current;
@@ -445,7 +459,7 @@ const App = () => {
         setCart(prev => {
             const existing = prev.find(i => i.id === item.id);
             if (existing) return prev.map(i => i.id === item.id ? { ...i, qty: Math.round((i.qty + i.step) * 10) / 10 } : i);
-            return [...prev, { id: item.id, name: item.name, qty: item.minQty, price: item.price, unit: item.unit, customPriceJson: item.customPriceJson, step: item.step, minQty: item.minQty }];
+            return [...prev, { ...item, qty: item.minQty }];
         });
     };
     
@@ -546,7 +560,7 @@ const App = () => {
 
 
     return e(React.Fragment, null,
-        e(Header, { activeTab, onTabClick: handleTabClick, groupedItems, currentTheme, onToggleTheme: toggleTheme, searchQuery, onSearchChange: handleSearchChange }),
+        e(Header, { activeTab, onTabClick: handleTabClick, groupedItems, currentTheme, onToggleTheme: handleToggleTheme, searchQuery, onSearchChange: handleSearchChange }),
         e('main', { ref: mainContentRef, className: 'flex-grow px-4 sm:px-6 py-4 max-w-5xl mx-auto w-full transition-opacity duration-150 ease-in-out pb-48' },
             error && e('div', { className: 'text-center py-10 text-red-500 bg-white/80 dark:bg-red-900/30 dark:text-red-400 rounded-lg p-4 font-semibold' },
                 e('p', null, error),
@@ -554,7 +568,7 @@ const App = () => {
             ),
             e('div', { className: 'space-y-4' }, renderContent())
         ),
-        e(Cart, { ref: cartRef, cart, onIncrement: handleIncrementCartItem, onDecrement: handleDecrementCartItem, onRemove: handleRemoveFromCart, onConfirm: handleConfirmOrder, isVisible: cart.length > 0, isExpanded: isCartExpanded, onToggle: handleToggleCart, orderComment, onCommentChange: handleCommentChange, isConfirmingOrder }),
+        e(Cart, { ref: cartRef, cart, onIncrement: handleIncrementCartItem, onDecrement: handleDecrementCartItem, onRemove: handleRemoveFromCart, onConfirm: handleConfirmOrder, isVisible: cart.length > 0, isExpanded: isCartExpanded, onToggle: handleToggleCart, orderComment, onCommentChange: (e) => setOrderComment(e.target.value), isConfirmingOrder }),
         e(Modal, { item: modalItem, isVisible: isModalVisible, onClose: handleCloseModal, style: modalStyle })
     );
 };
